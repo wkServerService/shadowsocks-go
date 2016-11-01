@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"golang.org/x/net/websocket"
 )
 
 const (
@@ -60,6 +61,32 @@ func RawAddr(addr string) (buf []byte, err error) {
 // ATYP field. (Refer to rfc1928 for more information.)
 func DialWithRawAddr(rawaddr []byte, server string, cipher *Cipher) (c *Conn, err error) {
 	conn, err := net.Dial("tcp", server)
+	if err != nil {
+		return
+	}
+	c = NewConn(conn, cipher)
+	if cipher.ota {
+		if c.enc == nil {
+			if _, err = c.initEncrypt(); err != nil {
+				return
+			}
+		}
+		// since we have initEncrypt, we must send iv manually
+		conn.Write(cipher.iv)
+		rawaddr[0] |= OneTimeAuthMask
+		rawaddr = otaConnectAuth(cipher.iv, cipher.key, rawaddr)
+	}
+	if _, err = c.write(rawaddr); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return
+}
+// This is intended for use by users implementing a local socks proxy.
+// rawaddr shoud contain part of the data in socks request, starting from the
+// ATYP field. (Refer to rfc1928 for more information.)
+func WsDial(rawaddr []byte, wsUrl, wsOrigin string, cipher *Cipher) (c *Conn, err error) {
+	conn, err := websocket.Dial(wsUrl, "", wsOrigin)
 	if err != nil {
 		return
 	}

@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"net/http"
+	"golang.org/x/net/websocket"
 
 	ss "github.com/shadowsocks/shadowsocks-go/shadowsocks"
 )
@@ -297,6 +299,40 @@ func run(port, password string, auth bool) {
 	}
 }
 
+func wsRun(wsUrl, wsOrigin string) {
+
+	//ws
+	http.Handle(wsUrl, websocket.Handler(wsConnection))
+	http.HandleFunc(wsOrigin, wsHandleHttp)
+	listen := "0.0.0.0:"+strconv.Itoa(config.ServerPort)
+	log.Printf("server listening port %v ...\n", listen)
+	err := http.ListenAndServe(listen, nil)
+	if err != nil {
+		panic("ListenAndServe: " + err.Error())
+	}
+}
+
+func wsHandleHttp(w http.ResponseWriter, r *http.Request)  {
+	w.Write([]byte("hello world!"))
+}
+
+var wsCipher *ss.Cipher
+func wsConnection(conn *websocket.Conn) {
+	var err error
+	// Creating cipher upon first connection.
+	if wsCipher == nil {
+		log.Println("creating cipher for port:", config.ServerPort)
+		wsCipher, err = ss.NewCipher(config.Method, config.Password)
+		if err != nil {
+			log.Printf("Error generating cipher for port: %s %v\n", config.ServerPort, err)
+			conn.Close()
+			return
+		}
+	}
+
+	handleConnection(ss.NewConn(conn, wsCipher.Copy()), config.Auth)
+}
+
 func enoughOptions(config *ss.Config) bool {
 	return config.ServerPort != 0 && config.Password != ""
 }
@@ -316,7 +352,13 @@ func unifyPortPassword(config *ss.Config) (err error) {
 	}
 	return
 }
+type ws_config struct{
+	Ws		bool
+	WsUrl		string
+	WsOrigin	string
+}
 
+var WsConfig *ws_config
 var configFile string
 var config *ss.Config
 
@@ -324,6 +366,7 @@ func main() {
 	log.SetOutput(os.Stdout)
 
 	var cmdConfig ss.Config
+	var cmdWsConfig ws_config
 	var printVer bool
 	var core int
 
@@ -335,6 +378,10 @@ func main() {
 	flag.StringVar(&cmdConfig.Method, "m", "", "encryption method, default: aes-256-cfb")
 	flag.IntVar(&core, "core", 0, "maximum number of CPU cores to use, default is determinied by Go runtime")
 	flag.BoolVar((*bool)(&debug), "d", false, "print debug message")
+
+	flag.BoolVar(&cmdWsConfig.Ws, "w", false, "use websocket")
+	flag.StringVar(&cmdWsConfig.WsUrl, "ws_url", "/ws", "print debug message")
+	flag.StringVar(&cmdWsConfig.WsOrigin, "ws_origin", "/", "print debug message")
 
 	flag.Parse()
 
@@ -374,8 +421,14 @@ func main() {
 	if core > 0 {
 		runtime.GOMAXPROCS(core)
 	}
-	for port, password := range config.PortPassword {
-		go run(port, password, config.Auth)
+
+	if(cmdWsConfig.Ws){
+		WsConfig = &cmdWsConfig
+		go wsRun(WsConfig.WsUrl,WsConfig.WsOrigin);
+	}else {
+		for port, password := range config.PortPassword {
+			go run(port, password, config.Auth)
+		}
 	}
 
 	waitSignal()

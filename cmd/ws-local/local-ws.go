@@ -239,7 +239,12 @@ func parseServerConfig(config *ss.Config) {
 
 func connectToServer(serverId int, rawaddr []byte, addr string) (remote *ss.Conn, err error) {
 	se := servers.srvCipher[serverId]
-	remote, err = ss.DialWithRawAddr(rawaddr, se.server, se.cipher.Copy())
+	if WsConfig.Ws{
+		remote, err = ss.WsDial(rawaddr, WsConfig.WsUrl, WsConfig.WsOrigin, se.cipher.Copy())
+	}else{
+		remote, err = ss.DialWithRawAddr(rawaddr, se.server, se.cipher.Copy())
+	}
+
 	if err != nil {
 		log.Println("error connecting to shadowsocks server:", err)
 		const maxFailCnt = 30
@@ -352,11 +357,20 @@ func enoughOptions(config *ss.Config) bool {
 		config.LocalPort != 0 && config.Password != ""
 }
 
+type ws_config struct{
+	Ws		bool
+	WsUrl		string
+	WsOrigin	string
+}
+
+var WsConfig *ws_config
+
 func main() {
 	log.SetOutput(os.Stdout)
 
 	var configFile, cmdServer, cmdLocal string
 	var cmdConfig ss.Config
+	var cmdWsConfig ws_config
 	var printVer bool
 
 	flag.BoolVar(&printVer, "version", false, "print version")
@@ -370,6 +384,11 @@ func main() {
 	flag.StringVar(&cmdConfig.Method, "m", "", "encryption method, default: aes-256-cfb")
 	flag.BoolVar((*bool)(&debug), "d", false, "print debug message")
 	flag.BoolVar(&cmdConfig.Auth, "A", false, "one time auth")
+
+
+	flag.BoolVar(&cmdWsConfig.Ws, "w", false, "use websocket")
+	flag.StringVar(&cmdWsConfig.WsUrl, "ws_url", "ws://127.0.0.1:8388/ws", "print debug message")
+	flag.StringVar(&cmdWsConfig.WsOrigin, "ws_origin", "http://127.0.0.1:8388/", "print debug message")
 
 	flag.Parse()
 
@@ -425,6 +444,10 @@ func main() {
 	}
 
 	parseServerConfig(config)
+
+	if(cmdWsConfig.Ws) {
+		WsConfig = &cmdWsConfig
+	}
 
 	run(cmdLocal + ":" + strconv.Itoa(config.LocalPort))
 }
