@@ -232,7 +232,11 @@ func parseServerConfig(config *ss.Config) {
 	}
 	servers.failCnt = make([]int, len(servers.srvCipher))
 	for _, se := range servers.srvCipher {
-		log.Println("available remote server", se.server)
+		if WsConfig.Ws{
+			log.Println("available remote server", WsConfig.WsUrl," ",WsConfig.WsOrigin)
+		}else{
+			log.Println("available remote server", se.server)
+		}
 	}
 	return
 }
@@ -405,6 +409,11 @@ func main() {
 		cmdConfig.Auth = true
 	}
 
+
+	if cmdWsConfig.Ws {
+		WsConfig = &cmdWsConfig
+	}
+
 	exists, err := ss.IsFileExists(configFile)
 	// If no config file in current directory, try search it in the binary directory
 	// Note there's no portable way to detect the binary directory.
@@ -428,26 +437,24 @@ func main() {
 	if config.Method == "" {
 		config.Method = "aes-256-cfb"
 	}
-	if len(config.ServerPassword) == 0 {
-		if !enoughOptions(config) {
-			fmt.Fprintln(os.Stderr, "must specify server address, password and both server/local port")
-			os.Exit(1)
-		}
-	} else {
-		if config.Password != "" || config.ServerPort != 0 || config.GetServerArray() != nil {
-			fmt.Fprintln(os.Stderr, "given server_password, ignore server, server_port and password option:", config)
-		}
-		if config.LocalPort == 0 {
-			fmt.Fprintln(os.Stderr, "must specify local port")
-			os.Exit(1)
+	if !cmdWsConfig.Ws {
+		if len(config.ServerPassword) == 0 {
+			if !enoughOptions(config) {
+				fmt.Fprintln(os.Stderr, "must specify server address, password and both server/local port")
+				os.Exit(1)
+			}
+		} else {
+			if config.Password != "" || config.ServerPort != 0 || config.GetServerArray() != nil {
+				fmt.Fprintln(os.Stderr, "given server_password, ignore server, server_port and password option:", config)
+			}
+			if config.LocalPort == 0 {
+				fmt.Fprintln(os.Stderr, "must specify local port")
+				os.Exit(1)
+			}
 		}
 	}
 
 	parseServerConfig(config)
-
-	if(cmdWsConfig.Ws) {
-		WsConfig = &cmdWsConfig
-	}
 
 	run(cmdLocal + ":" + strconv.Itoa(config.LocalPort))
 }
