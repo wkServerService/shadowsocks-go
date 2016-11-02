@@ -409,10 +409,7 @@ func main() {
 		cmdConfig.Auth = true
 	}
 
-
-	if cmdWsConfig.Ws {
-		WsConfig = &cmdWsConfig
-	}
+	WsConfig = &cmdWsConfig
 
 	exists, err := ss.IsFileExists(configFile)
 	// If no config file in current directory, try search it in the binary directory
@@ -437,20 +434,19 @@ func main() {
 	if config.Method == "" {
 		config.Method = "aes-256-cfb"
 	}
-	if !cmdWsConfig.Ws {
-		if len(config.ServerPassword) == 0 {
-			if !enoughOptions(config) {
-				fmt.Fprintln(os.Stderr, "must specify server address, password and both server/local port")
-				os.Exit(1)
-			}
-		} else {
-			if config.Password != "" || config.ServerPort != 0 || config.GetServerArray() != nil {
-				fmt.Fprintln(os.Stderr, "given server_password, ignore server, server_port and password option:", config)
-			}
-			if config.LocalPort == 0 {
-				fmt.Fprintln(os.Stderr, "must specify local port")
-				os.Exit(1)
-			}
+
+	if len(config.ServerPassword) == 0 {
+		if !enoughOptions(config) {
+			fmt.Fprintln(os.Stderr, "must specify server address, password and both server/local port")
+			os.Exit(1)
+		}
+	} else {
+		if config.Password != "" || config.ServerPort != 0 || config.GetServerArray() != nil {
+			fmt.Fprintln(os.Stderr, "given server_password, ignore server, server_port and password option:", config)
+		}
+		if config.LocalPort == 0 {
+			fmt.Fprintln(os.Stderr, "must specify local port")
+			os.Exit(1)
 		}
 	}
 
